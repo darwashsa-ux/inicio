@@ -1,0 +1,10 @@
+GRUPO DARWASH · INICIO — instalación (2 minutos)
+
+1. Copiá esta carpeta "extension-equipo" a C:\Darwash\ (o donde quieras, pero no la borres después).
+2. En Chrome abrí:  chrome://extensions
+3. Arriba a la derecha activá "Modo de desarrollador".
+4. Botón "Cargar descomprimida" → elegí esta carpeta.
+5. Abrí una pestaña nueva (Ctrl+T). Si Chrome pregunta, elegí "Mantener".
+6. La primera vez tocá "¿cómo te llamás?" para que te salude con tu nombre.
+
+Las actualizaciones llegan solas, no hay que hacer nada más.

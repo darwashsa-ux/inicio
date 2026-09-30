@@ -25,7 +25,15 @@
   const slug = s => norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "app-" + Date.now();
   const icons = () => { try { window.lucide && lucide.createIcons(); } catch {} };
 
-  const allApps = () => cfg.secciones.flatMap(s => s.apps.map(a => ({ ...a, _sec: s })));
+  // ---------- perfil: admin (secciones soloAdmin) y nombre por usuario ----------
+  try {
+    const qs = new URLSearchParams(location.search);
+    if (qs.get("admin") === "1") LS.set("dw.admin", "1");
+    if (qs.get("admin") === "0") LS.del("dw.admin");
+  } catch {}
+  const esAdmin = () => LS.get("dw.admin", "") === "1";
+  const secciones = () => cfg.secciones.filter(s => !s.soloAdmin || esAdmin());
+  const allApps = () => secciones().flatMap(s => s.apps.map(a => ({ ...a, _sec: s })));
   const saveCfg = () => LS.set(K.cfg, cfg);
 
   // ---------- tema ----------
@@ -47,8 +55,20 @@
     const saludo = h < 6 ? "Buenas noches" : h < 13 ? "Buen día" : h < 20 ? "Buenas tardes" : "Buenas noches";
     const dia = now.getDay();
     const extra = dia === 1 ? " · arrancamos la semana" : dia === 5 ? " · último empujón" : "";
-    $("#greet").innerHTML = `${saludo}, <em>${esc(cfg.usuario || "")}</em>${extra}`;
+    const nombre = LS.get("dw.nombre", "");
+    const html = nombre
+      ? `${saludo}, <em class="nombre" title="Cambiar nombre">${esc(nombre)}</em>${extra}`
+      : `${saludo}${extra} <button class="pedir" type="button">¿cómo te llamás?</button>`;
+    if (html !== lastGreet) { $("#greet").innerHTML = html; lastGreet = html; }
   }
+  let lastGreet = "";
+  $("#greet").addEventListener("click", e => {
+    if (!e.target.closest(".nombre, .pedir")) return;
+    const n = prompt("¿Cómo te llamás?", LS.get("dw.nombre", ""));
+    if (n === null) return;
+    n.trim() ? LS.set("dw.nombre", n.trim().slice(0, 30)) : LS.del("dw.nombre");
+    tick();
+  });
 
   // ---------- tiles ----------
   function tileHTML(a, n) {
@@ -91,7 +111,7 @@
       const top = apps.filter(a => (uso[a.id] || 0) > 0 && !a.fav && a.url)
         .sort((x, y) => uso[y.id] - uso[x.id]).slice(0, 6);
       if (top.length >= 2) out.push(section({ nombre: "Más usadas", icono: "flame", color: "#F97316" }, top, { compact: true }));
-      cfg.secciones.forEach(s => out.push(section(s, s.apps.map(a => ({ ...a, _sec: s })), { secId: s.id, numbered: out.length === 0 })));
+      secciones().forEach(s => out.push(section(s, s.apps.map(a => ({ ...a, _sec: s })), { secId: s.id, numbered: out.length === 0 })));
     }
     $("#content").innerHTML = out.join("");
     icons();

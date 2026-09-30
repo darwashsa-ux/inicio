@@ -8,9 +8,8 @@
 //  url:   "" = queda marcada como "falta URL"
 // ============================================================
 window.DW_CONFIG = {
-  version: 5, // subilo cuando cambies este archivo: pisa los cambios locales hechos con "Editar"
-  empresa: "Darwash SA",
-  usuario: "Leo",
+  version: 6, // subilo cuando cambies este archivo: pisa los cambios locales hechos con "Editar"
+  empresa: "Grupo Darwash",
   ubicacion: { nombre: "Vicuña Mackenna", lat: -34.415, lon: -64.389 },
   // Calendario de remates (tabla calendario_remates en Supabase — ver supabase/calendario_remates.sql)
   remateFuente: {
@@ -22,7 +21,7 @@ window.DW_CONFIG = {
   secciones: [
     {
       id: "sistemas",
-      nombre: "Sistemas Darwash",
+      nombre: "Sistemas del Grupo",
       icono: "layout-grid",
       color: "#008995",
       apps: [
@@ -63,6 +62,7 @@ window.DW_CONFIG = {
     {
       id: "datos",
       nombre: "Datos e Infraestructura",
+      soloAdmin: true, // solo visible con ?admin=1
       icono: "database",
       color: "#1F4E5F",
       apps: [
@@ -90,6 +90,7 @@ window.DW_CONFIG = {
     {
       id: "desarrollo",
       nombre: "En desarrollo",
+      soloAdmin: true,
       icono: "hammer",
       color: "#7A7266",
       apps: [

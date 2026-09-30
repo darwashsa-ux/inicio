@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Darwash · Inicio</title>
+  <meta name="theme-color" content="#0B3B40">
+  <link rel="manifest" href="site.webmanifest">
+  <link rel="icon" href="icons/icon-128.png">
+  <link rel="apple-touch-icon" href="icons/icon-512.png">
+  <link rel="preload" href="img/hero.jpg" as="image">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="layout">
+    <!-- ===== Panel foto ===== -->
+    <aside class="hero">
+      <img class="hero-img" src="img/hero.jpg" alt="">
+      <div class="hero-shade"></div>
+
+      <div class="hero-top">
+        <img class="logo" src="img/logo-white.png" alt="Darwash · Negocios Ganaderos">
+      </div>
+
+      <div class="hero-bottom">
+        <div class="clock" id="clock">--:--</div>
+        <div class="date" id="date"></div>
+        <div class="greet" id="greet"></div>
+
+        <div class="parte">
+          <div class="parte-h"><span>Parte del día</span><small id="lugar"></small></div>
+          <div class="row" id="weatherChip"><i data-lucide="cloud-sun"></i><span>Cargando clima…</span></div>
+          <div class="forecast" id="forecast"></div>
+          <div class="row" id="dolarChip"><i data-lucide="dollar-sign"></i><span>Cargando dólar…</span></div>
+          <div class="row remate" id="remateBox" hidden></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ===== Apps ===== -->
+    <div class="col">
+      <header class="top">
+        <div class="brand-mini">
+          <img class="mono mono-teal" src="img/drw-teal.png" alt="DRW">
+          <div>
+            <div class="brand-name">DARWASH</div>
+            <div class="brand-sub" id="brandSub">Negocios Ganaderos</div>
+          </div>
+        </div>
+        <label class="search">
+          <i data-lucide="search"></i>
+          <input id="q" type="search" autocomplete="off" spellcheck="false"
+                 placeholder="Buscar sistema, o escribir y Enter para Google">
+          <kbd>/</kbd>
+        </label>
+      </header>
+
+      <main id="content"></main>
+
+      <footer class="bar">
+        <button class="btn ghost" id="btnEdit"><i data-lucide="pencil"></i><span>Editar</span></button>
+        <button class="btn ghost" id="btnTab" title="Abrir apps en pestaña nueva"><i data-lucide="external-link"></i><span>Misma pestaña</span></button>
+        <button class="btn ghost" id="btnTheme" title="Tema"><i data-lucide="sun-moon"></i><span>Auto</span></button>
+        <span class="spacer"></span>
+        <span class="hint"><kbd>/</kbd> buscar · <kbd>Alt</kbd>+<kbd>1-9</kbd> primeras · <kbd>Esc</kbd> limpiar</span>
+        <div class="edit-actions" id="editActions" hidden>
+          <button class="btn" id="btnExport"><i data-lucide="download"></i><span>Exportar config.js</span></button>
+          <label class="btn"><i data-lucide="upload"></i><span>Importar</span><input type="file" id="fileImport" accept=".js,.json" hidden></label>
+          <button class="btn danger" id="btnReset"><i data-lucide="rotate-ccw"></i><span>Restaurar</span></button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <dialog id="dlg">
+    <form id="frm" method="dialog">
+      <h3 id="dlgTitle">App</h3>
+      <div class="grid2">
+        <label>Nombre<input name="nombre" required></label>
+        <label><span>Ícono · <a href="https://lucide.dev/icons" target="_blank" rel="noopener">ver lista</a></span>
+          <span class="icon-input"><input name="icono" placeholder="truck"><span id="iconPreview"></span></span>
+        </label>
+      </div>
+      <label>URL<input name="url" type="url" placeholder="https://…"></label>
+      <label>Descripción<input name="desc"></label>
+      <div class="grid2">
+        <label>Sección<input name="seccion" list="secList" required></label>
+        <label class="checks">
+          <span><input type="checkbox" name="fav"> Favorita</span>
+          <span><input type="checkbox" name="ping"> Chequear estado</span>
+        </label>
+      </div>
+      <datalist id="secList"></datalist>
+      <div class="dlg-actions">
+        <button type="button" class="btn danger" id="btnDelete">Borrar</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" id="btnCancel">Cancelar</button>
+        <button type="submit" class="btn primary" value="ok">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="lucide.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

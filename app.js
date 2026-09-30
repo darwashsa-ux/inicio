@@ -166,7 +166,7 @@
     if (e.key === "ArrowDown") { e.preventDefault(); $("#content .tile[data-id]")?.focus(); }
   });
   document.addEventListener("keydown", e => {
-    if ($("#dlg").open) return;
+    if ($("#dlg").open || $("#dlgCal").open) return;
     const typing = document.activeElement?.tagName === "INPUT";
     if (e.key === "/" && !typing) { e.preventDefault(); q.focus(); q.select(); }
     if (e.altKey && /^[1-9]$/.test(e.key)) {
@@ -341,28 +341,187 @@
     LS.del(K.cfg); cfg = clone(DEFAULT); render(); pingAll();
   });
 
-  // ---------- próximo remate (config.remates) ----------
-  function remate() {
-    const box = $("#remateBox");
-    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-    const prox = (cfg.remates || [])
-      .map(r => ({ ...r, d: new Date(r.fecha + "T00:00:00") }))
-      .filter(r => !isNaN(r.d) && r.d >= hoy).sort((a, b) => a.d - b.d)[0];
-    if (!prox) { box.hidden = true; return; }
-    const dias = Math.round((prox.d - hoy) / 86400000);
-    const cuando = dias === 0 ? "<b>HOY</b>" : dias === 1 ? "<b>mañana</b>" : `en <b>${dias} días</b>`;
-    const f = prox.d.toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" });
-    box.innerHTML = `<i data-lucide="gavel"></i><span>Próximo remate ${cuando}</span><span class="sep"></span>
-      <small>${esc(f)} · ${esc(prox.lugar || "")}${prox.tipo ? " · " + esc(prox.tipo) : ""}</small>`;
-    box.hidden = false; icons();
+  // ---------- calendario de remates ----------
+  // Tabla calendario_remates (Supabase): lectura pública, alta/baja por RPC con PIN.
+  const MESES = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+  const MESES_L = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  const DIAS_L = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const toD = f => new Date(f + "T00:00:00");
+  const PLAZA_COLORES = ["#C9A227", "#4FB3BA", "#D08A5B", "#9DB06A", "#B99AD6", "#E0B872"];
+  const colorPlaza = p => { let h = 0; for (const c of norm(p)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PLAZA_COLORES[h % PLAZA_COLORES.length]; };
+  const K_PIN = "dw.calpin";
+  let remLista = [];      // [{id, fecha, lugar, d}]
+  let remError = false;
+
+  const sbHeaders = f => ({ apikey: f.key, Authorization: "Bearer " + f.key, "Content-Type": "application/json" });
+  async function sbCargar() {
+    const f = cfg.remateFuente; if (!f?.url) return [];
+    const desde = new Date(); desde.setMonth(desde.getMonth() - 3);
+    const r = await fetch(`${f.url}/rest/v1/calendario_remates?select=id,fecha,lugar&fecha=gte.${ymd(desde)}&order=fecha.asc&limit=1000`, { headers: sbHeaders(f) });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
   }
+  async function sbRpc(fn, body) {
+    const f = cfg.remateFuente;
+    const r = await fetch(`${f.url}/rest/v1/rpc/${fn}`, { method: "POST", headers: sbHeaders(f), body: JSON.stringify(body) });
+    if (!r.ok) { let m = "Error " + r.status; try { m = (await r.json()).message || m; } catch {} throw new Error(m); }
+  }
+
+  async function remates(forzar) {
+    try {
+      if (forzar) { const c = LS.get(K.cache, {}); delete c.remates2; LS.set(K.cache, c); }
+      const remoto = await cached("remates2", 10, sbCargar);
+      remError = false;
+      remLista = remoto.map(x => ({ id: x.id, fecha: String(x.fecha).slice(0, 10), lugar: x.lugar }));
+    } catch { remError = true; }
+    const manual = (cfg.remates || []).map(r => ({ id: null, fecha: r.fecha, lugar: r.lugar || r.nombre || "Remate" }));
+    remLista = [...remLista, ...manual].map(r => ({ ...r, d: toD(r.fecha) })).filter(r => !isNaN(r.d)).sort((a, b) => a.d - b.d);
+    pintarTira();
+    if ($("#dlgCal").open) pintarCal();
+  }
+
+  function pintarTira() {
+    const cal = $("#calRemates");
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const lim = new Date(hoy); lim.setDate(lim.getDate() + 30);
+    const futuros = remLista.filter(r => r.d >= hoy);
+    const prox30 = futuros.filter(r => r.d <= lim).length;
+    const corto = n => n === 0 ? "HOY" : n === 1 ? "mañana" : `en ${n} d`;
+    const cells = futuros.slice(0, 5).map((r, i) => {
+      const n = Math.round((r.d - hoy) / 86400000);
+      return `<button class="rc${n === 0 ? " hoy" : i === 0 ? " prox" : ""}" data-fecha="${r.fecha}" style="--pc:${colorPlaza(r.lugar)}" title="${esc(r.lugar)}">
+        <span class="rc-dia">${DIAS_L[r.d.getDay()].slice(0, 3)}</span>
+        <b class="rc-fecha">${r.d.getDate()} ${MESES[r.d.getMonth()]}</b>
+        <span class="rc-lug">${esc(r.lugar)}</span>
+        <span class="rc-cuando">${corto(n)}</span>
+      </button>`;
+    });
+    const vacio = `<button class="rc-vacio" data-fecha="">${remError ? "No pude leer el calendario" : "Sin remates próximos"} · <b>+ agregar</b></button>`;
+    cal.innerHTML = `
+      <div class="parte-h"><span>Remates</span><small>${prox30} en 30 días · <button class="linkbtn" data-fecha="">+ calendario</button></small></div>
+      <div class="cal-grid">${cells.length ? cells.join("") : vacio}</div>`;
+    cal.hidden = false;
+    icons();
+  }
+
+  // ----- modal calendario -----
+  const dlgCal = $("#dlgCal");
+  let calMes = new Date(); calMes.setDate(1); calMes.setHours(0, 0, 0, 0);
+  let calSel = ymd(new Date());
+
+  function abrirCal(fecha) {
+    if (fecha) { calSel = fecha; const d = toD(fecha); calMes = new Date(d.getFullYear(), d.getMonth(), 1); }
+    pintarCal(); dlgCal.showModal();
+    setTimeout(() => $("#calLugar")?.focus(), 30);
+  }
+
+  function pintarCal() {
+    const hoyS = ymd(new Date());
+    const y = calMes.getFullYear(), m = calMes.getMonth();
+    const primero = new Date(y, m, 1), offset = (primero.getDay() + 6) % 7; // lunes primero
+    const diasMes = new Date(y, m + 1, 0).getDate();
+    const porDia = {};
+    remLista.forEach(r => (porDia[r.fecha] = porDia[r.fecha] || []).push(r));
+    let celdas = "";
+    for (let i = 0; i < offset; i++) celdas += `<span class="cd vacia"></span>`;
+    for (let dd = 1; dd <= diasMes; dd++) {
+      const f = ymd(new Date(y, m, dd)), rs = porDia[f] || [];
+      const cls = ["cd", f === hoyS ? "hoy" : "", f === calSel ? "sel" : "", f < hoyS ? "pasado" : "", rs.length ? "tiene" : ""].join(" ");
+      celdas += `<button type="button" class="${cls}" data-f="${f}"><span class="cd-n">${dd}</span>
+        ${rs.slice(0, 2).map(r => `<span class="cd-p" style="--pc:${colorPlaza(r.lugar)}">${esc(r.lugar)}</span>`).join("")}
+        ${rs.length > 2 ? `<span class="cd-mas">+${rs.length - 2}</span>` : ""}</button>`;
+    }
+    const sd = toD(calSel), delDia = porDia[calSel] || [];
+    const pin = LS.get(K_PIN, "");
+    const lugares = [...new Set([...(cfg.plazas || []), ...remLista.map(r => r.lugar)])];
+    $("#calBody").innerHTML = `
+      <div class="cal-top">
+        <h3>Calendario de remates</h3>
+        <div class="cal-nav">
+          <button type="button" class="tbtn" data-nav="-1" title="Mes anterior"><i data-lucide="chevron-left"></i></button>
+          <b>${MESES_L[m]} ${y}</b>
+          <button type="button" class="tbtn" data-nav="1" title="Mes siguiente"><i data-lucide="chevron-right"></i></button>
+          <button type="button" class="btn ghost sm" data-nav="0">Hoy</button>
+        </div>
+        <button type="button" class="tbtn" data-cerrar title="Cerrar"><i data-lucide="x"></i></button>
+      </div>
+      <div class="cal-wrap">
+        <div class="cal-mes">
+          ${["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map(d => `<span class="cd-h">${d}</span>`).join("")}
+          ${celdas}
+        </div>
+        <div class="cal-dia">
+          <div class="cal-dia-t">${DIAS_L[sd.getDay()]} ${sd.getDate()} de ${MESES_L[sd.getMonth()].toLowerCase()}</div>
+          <div class="cal-dia-l">
+            ${delDia.length ? delDia.map(r => `<div class="cal-it" style="--pc:${colorPlaza(r.lugar)}"><i class="pdot"></i><span>${esc(r.lugar)}</span>
+              ${r.id ? `<button type="button" class="tbtn" data-borrar="${r.id}" title="Borrar"><i data-lucide="trash-2"></i></button>` : `<small>config.js</small>`}</div>`).join("")
+              : `<div class="cal-nada">Sin remates este día</div>`}
+          </div>
+          <form id="calForm" class="cal-form" autocomplete="off">
+            <label>Lugar<input id="calLugar" list="calLugares" placeholder="Ej: Washington" maxlength="60" required></label>
+            <datalist id="calLugares">${lugares.map(l => `<option value="${esc(l)}">`).join("")}</datalist>
+            <div class="chips">${(cfg.plazas || []).map(p => `<button type="button" class="chip-p" style="--pc:${colorPlaza(p)}" data-plaza="${esc(p)}">${esc(p)}</button>`).join("")}</div>
+            ${pin ? "" : `<label>PIN del calendario<input id="calPin" type="password" inputmode="numeric" placeholder="Se pide una sola vez" required></label>`}
+            <button type="submit" class="btn primary"><i data-lucide="plus"></i><span>Agregar remate</span></button>
+            <div class="cal-msg" id="calMsg"></div>
+            ${pin ? `<button type="button" class="linkbtn mut" data-olvidar>Olvidar PIN en este equipo</button>` : ""}
+          </form>
+        </div>
+      </div>`;
+    icons();
+  }
+
+  const msg = (t, ok) => { const el = $("#calMsg"); if (el) { el.textContent = t; el.className = "cal-msg" + (ok ? " ok" : " err"); } };
+
+  dlgCal.addEventListener("click", async e => {
+    if (e.target === dlgCal) return dlgCal.close(); // click en el fondo
+    const t = e.target.closest("button"); if (!t) return;
+    if (t.dataset.f) { calSel = t.dataset.f; pintarCal(); $("#calLugar")?.focus(); return; }
+    if (t.dataset.nav) {
+      const n = +t.dataset.nav;
+      if (n === 0) { calMes = new Date(); calMes.setDate(1); calSel = ymd(new Date()); } else calMes = new Date(calMes.getFullYear(), calMes.getMonth() + n, 1);
+      pintarCal(); return;
+    }
+    if ("cerrar" in t.dataset) return dlgCal.close();
+    if (t.dataset.plaza) { $("#calLugar").value = t.dataset.plaza; $("#calForm").requestSubmit(); return; }
+    if ("olvidar" in t.dataset) { LS.del(K_PIN); pintarCal(); return; }
+    if (t.dataset.borrar) {
+      const pin = LS.get(K_PIN, ""); if (!pin) return msg("Cargá el PIN primero (agregando un remate).");
+      t.disabled = true;
+      try { await sbRpc("cal_borrar", { p_id: +t.dataset.borrar, p_pin: pin }); await remates(true); }
+      catch (err) { t.disabled = false; msg(err.message); if (/pin/i.test(err.message)) { LS.del(K_PIN); } }
+    }
+  });
+  dlgCal.addEventListener("submit", async e => {
+    e.preventDefault();
+    const lugar = $("#calLugar").value.trim(); if (!lugar) return;
+    const pin = LS.get(K_PIN, "") || $("#calPin")?.value.trim();
+    if (!pin) return msg("Falta el PIN");
+    const btn = e.target.querySelector("button[type=submit]"); btn.disabled = true;
+    try {
+      await sbRpc("cal_agregar", { p_fecha: calSel, p_lugar: lugar, p_pin: pin });
+      LS.set(K_PIN, pin);
+      await remates(true);
+      msg(`Agregado: ${lugar}`, true);
+    } catch (err) {
+      btn.disabled = false;
+      if (/pin/i.test(err.message)) LS.del(K_PIN);
+      msg(err.message.includes("Failed to fetch") ? "Sin conexión con la base" : err.message);
+    }
+  });
+
+  $("#calRemates").addEventListener("click", e => {
+    const t = e.target.closest("[data-fecha]"); if (!t) return;
+    abrirCal(t.dataset.fecha || null);
+  });
 
   // ---------- init ----------
   $("#lugar").textContent = cfg.ubicacion?.nombre || "";
-  remate();
+  remates();
   applyTheme(); tick(); render();
   setInterval(tick, 1000);
   clima(); dolar(); pingAll();
-  setInterval(() => { clima(); dolar(); }, 15 * 60000);
+  setInterval(() => { clima(); dolar(); remates(); }, 15 * 60000);
   setTimeout(() => q.focus({ preventScroll: true }), 50);
 })();

@@ -47,7 +47,7 @@ Nota: la versión extensión y la web guardan sus cambios locales por separado; 
 
 ## Qué trae
 - Panel con foto de hacienda + logo Darwash (cambiá `img/hero.jpg` por cualquier foto vertical)
-- **Parte del día**: clima, lluvia de ayer, pronóstico, dólar y **próximo remate** (cargá fechas en `remates` de `config.js`)
+- **Parte del día**: clima, lluvia de ayer, pronóstico, dólar y **calendario de remates** (lee Supabase de Anotaciones Feria + `remates` manuales en `config.js`)
 - Tipografía Marcellus (serif tipo logo) + Inter, vendorizadas en `fonts/`
 - Reloj, fecha y saludo
 - Clima Vicuña Mackenna (Open-Meteo): actual, viento, humedad, **lluvia de ayer en mm** y pronóstico 4 días

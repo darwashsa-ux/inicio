@@ -8,13 +8,17 @@
 //  url:   "" = queda marcada como "falta URL"
 // ============================================================
 window.DW_CONFIG = {
-  version: 3, // subilo cuando cambies este archivo: pisa los cambios locales hechos con "Editar"
+  version: 5, // subilo cuando cambies este archivo: pisa los cambios locales hechos con "Editar"
   empresa: "Darwash SA",
   usuario: "Leo",
   ubicacion: { nombre: "Vicuña Mackenna", lat: -34.415, lon: -64.389 },
-  // Próximos remates: aparece "Próximo remate en X días" en el parte del día.
-  // Ej: { fecha: "2026-10-08", lugar: "Vicuña Mackenna", tipo: "Invernada" }
-  remates: [],
+  // Calendario de remates (tabla calendario_remates en Supabase — ver supabase/calendario_remates.sql)
+  remateFuente: {
+    url: "https://qkrrumlbvspbxjoxvxho.supabase.co",
+    key: "sb_publishable_ZKjsxf9lkh4tgkhAayDvbA_6DOE7E6d" // publishable key
+  },
+  // Lugares que aparecen como botones rápidos al cargar un remate
+  plazas: ["Washington", "General Villegas", "Carlos Casares"],
   secciones: [
     {
       id: "sistemas",

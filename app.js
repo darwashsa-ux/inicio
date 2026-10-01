@@ -32,7 +32,17 @@
     if (qs.get("admin") === "0") LS.del("dw.admin");
   } catch {}
   const esAdmin = () => LS.get("dw.admin", "") === "1";
-  const secciones = () => cfg.secciones.filter(s => !s.soloAdmin || esAdmin());
+  // orden y ocultas: preferencia de cada usuario (no se pisa con los cambios de config.js)
+  const K_ORD = "dw.secOrden", K_OCU = "dw.secOcultas", K_FOTOS = "dw.fotos";
+  const ordenar = arr => {
+    const ord = LS.get(K_ORD, []);
+    const pos = id => { const i = ord.indexOf(id); return i < 0 ? 1e3 : i; };
+    return arr.map((x, i) => ({ x, i })).sort((a, b) => pos(a.x.id) - pos(b.x.id) || a.i - b.i).map(o => o.x);
+  };
+  const oculta = id => LS.get(K_OCU, []).includes(id);
+  const seccionesTodas = () => ordenar(cfg.secciones.filter(s => !s.soloAdmin || esAdmin()));
+  const secciones = () => seccionesTodas().filter(s => !oculta(s.id));
+  const fotoDe = a => LS.get(K_FOTOS, {})[a.id] || a.foto || "";
   const allApps = () => secciones().flatMap(s => s.apps.map(a => ({ ...a, _sec: s })));
   const saveCfg = () => LS.set(K.cfg, cfg);
 
@@ -80,7 +90,12 @@
     const dot = a.ping && has ? `<span class="dot ${st || "wait"}" title="${st === "ok" ? "Responde" : st === "ko" ? "No responde" : "Chequeando…"}"></span>` : "";
     const badge = has ? "" : `<span class="badge">Falta URL</span>`;
     const num = n ? `<kbd class="num">${n}</kbd>` : "";
+    const foto = fotoDe(a);
+    const cover = `<span class="cover${foto ? " foto" : ""}">${foto
+      ? `<img src="${esc(foto)}" alt="" loading="lazy" decoding="async">`
+      : (a.icono ? `<i data-lucide="${esc(a.icono)}" class="cover-ico"></i>` : "")}</span>`;
     return `<a class="tile${has ? "" : " nourl"}" style="--c:${esc(color)}" data-id="${esc(a.id)}" href="${has ? esc(a.url) : "#"}"${has ? tgt : ""}>
+      ${cover}
       <span class="ico">${ico}</span>
       <span class="txt"><b>${esc(a.nombre)}</b>${a.desc ? `<small>${esc(a.desc)}</small>` : ""}</span>
       ${dot}${badge}${num}
@@ -111,7 +126,11 @@
       const top = apps.filter(a => (uso[a.id] || 0) > 0 && !a.fav && a.url)
         .sort((x, y) => uso[y.id] - uso[x.id]).slice(0, 6);
       if (top.length >= 2) out.push(section({ nombre: "Más usadas", icono: "flame", color: "#F97316" }, top, { compact: true }));
-      secciones().forEach(s => out.push(section(s, s.apps.map(a => ({ ...a, _sec: s })), { secId: s.id, numbered: out.length === 0 })));
+      const lista = editing ? seccionesTodas() : secciones();
+      lista.forEach((s, i) => out.push(section(s, s.apps.map(a => ({ ...a, _sec: s })),
+        { secId: s.id, numbered: out.length === 0, primera: i === 0, ultima: i === lista.length - 1, oculta: oculta(s.id) })));
+      const nOcu = seccionesTodas().filter(s => oculta(s.id)).length;
+      if (nOcu && !editing) out.push(`<div class="ocultas-nota">${nOcu} ${nOcu === 1 ? "sección oculta" : "secciones ocultas"} · tocá <b>Editar</b> para mostrarlas</div>`);
     }
     $("#content").innerHTML = out.join("");
     icons();
@@ -121,12 +140,30 @@
     let i = 0;
     const tiles = list.map(a => tileHTML(a, o.numbered && ++i <= 9 ? i : 0)).join("");
     const add = o.secId ? `<button class="tile add-tile" data-add="${esc(o.secId)}"><i data-lucide="plus"></i> Agregar</button>` : "";
-    return `<section class="sec">
+    const ctrl = o.secId ? `<span class="sec-ctrl">
+        <button class="tbtn" data-sec-act="up" data-sec="${esc(o.secId)}" title="Subir sección"${o.primera ? " disabled" : ""}><i data-lucide="arrow-up"></i></button>
+        <button class="tbtn" data-sec-act="down" data-sec="${esc(o.secId)}" title="Bajar sección"${o.ultima ? " disabled" : ""}><i data-lucide="arrow-down"></i></button>
+        <button class="tbtn${o.oculta ? " on" : ""}" data-sec-act="toggle" data-sec="${esc(o.secId)}" title="${o.oculta ? "Mostrar" : "Ocultar"} sección"><i data-lucide="${o.oculta ? "eye-off" : "eye"}"></i></button>
+      </span>` : "";
+    return `<section class="sec${o.oculta ? " is-oculta" : ""}">
       <h2 class="sec-h" style="--c:${esc(s.color || "#008995")}">
-        <span class="sw"><i data-lucide="${esc(s.icono || "folder")}"></i></span>${esc(s.nombre)}<span class="line"></span>
+        <span class="sw"><i data-lucide="${esc(s.icono || "folder")}"></i></span>${esc(s.nombre)}<span class="line"></span>${ctrl}
       </h2>
       <div class="grid${o.compact ? " compact" : ""}">${tiles}${add}</div>
     </section>`;
+  }
+
+  // mover / ocultar secciones (modo Editar)
+  function moverSeccion(id, dir) {
+    const ids = seccionesTodas().map(s => s.id);
+    const i = ids.indexOf(id), j = i + dir;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    LS.set(K_ORD, ids); render();
+  }
+  function toggleSeccion(id) {
+    const o = LS.get(K_OCU, []);
+    LS.set(K_OCU, o.includes(id) ? o.filter(x => x !== id) : [...o, id]); render();
   }
 
   function score(a, q) {
@@ -153,6 +190,13 @@
   const findApp = id => allApps().find(a => a.id === id);
 
   $("#content").addEventListener("click", e => {
+    const sa = e.target.closest("[data-sec-act]");
+    if (sa) {
+      e.preventDefault();
+      const id = sa.dataset.sec, act = sa.dataset.secAct;
+      if (act === "up") moverSeccion(id, -1); else if (act === "down") moverSeccion(id, 1); else toggleSeccion(id);
+      return;
+    }
     const add = e.target.closest("[data-add]");
     if (add) { e.preventDefault(); return editar(null, add.dataset.add); }
     const t = e.target.closest(".tile[data-id]");
@@ -163,6 +207,9 @@
     if (act === "edit" || editing || !a.url) { e.preventDefault(); return editar(a); }
     registrarUso(a.id); // deja que el <a> navegue (respeta Ctrl/click medio)
   });
+  $("#content").addEventListener("error", e => {
+    if (e.target.tagName === "IMG" && e.target.closest(".cover")) { const c = e.target.closest(".cover"); c.classList.remove("foto"); e.target.remove(); }
+  }, true);
   $("#content").addEventListener("auxclick", e => {
     const t = e.target.closest(".tile[data-id]"); if (t && e.button === 1) registrarUso(t.dataset.id);
   });
@@ -290,6 +337,9 @@
     frm.nombre.value = a?.nombre || ""; frm.url.value = a?.url || ""; frm.desc.value = a?.desc || "";
     frm.icono.value = a?.icono || ""; frm.seccion.value = sec?.nombre || cfg.secciones[0]?.nombre || "";
     frm.fav.checked = !!a?.fav; frm.ping.checked = a ? !!a.ping : true;
+    fotoPend = undefined;
+    frm.foto.value = a?.foto || "";
+    fotoPreview(a ? fotoDe(a) : "");
     $("#btnDelete").hidden = !a;
     previewIcon(); dlg.showModal(); frm.nombre.focus();
   }
@@ -298,6 +348,27 @@
     icons();
   }
   frm.icono.addEventListener("input", previewIcon);
+
+  // ----- foto de la tarjeta -----
+  // Ruta/URL (campo "foto") → va a config.js y la ven todos.
+  // Subida desde la PC → queda solo en este navegador (localStorage dw.fotos), achicada a 640px.
+  let fotoPend; // undefined = sin cambios · "" = quitar foto personal · dataURL = nueva foto personal
+  function fotoPreview(src) {
+    $("#fotoPreview").style.backgroundImage = src ? `url("${src.replace(/"/g, "%22")}")` : "";
+    $("#fotoPreview").classList.toggle("vacia", !src);
+  }
+  frm.foto.addEventListener("input", () => { if (!fotoPend) fotoPreview(frm.foto.value.trim()); });
+  $("#fotoFile").addEventListener("change", async e => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    try {
+      const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = URL.createObjectURL(f); });
+      const W = 640, H = Math.round(640 * 0.42), c = document.createElement("canvas"); c.width = W; c.height = H;
+      const r = Math.max(W / img.width, H / img.height), w = img.width * r, h = img.height * r;
+      c.getContext("2d").drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+      fotoPend = c.toDataURL("image/jpeg", 0.74); fotoPreview(fotoPend);
+    } catch { alert("No pude leer esa imagen."); }
+  });
+  $("#fotoQuitar").addEventListener("click", () => { fotoPend = ""; frm.foto.value = ""; fotoPreview(""); });
   $("#btnCancel").addEventListener("click", () => dlg.close());
   $("#btnDelete").addEventListener("click", () => {
     cfg.secciones.forEach(s => s.apps = s.apps.filter(x => x.id !== editId));
@@ -309,7 +380,15 @@
       id: editId || slug(frm.nombre.value), nombre: frm.nombre.value.trim(), desc: frm.desc.value.trim(),
       url: frm.url.value.trim(), icono: frm.icono.value.trim(), ping: frm.ping.checked, fav: frm.fav.checked
     };
-    if (!data.fav) delete data.fav;
+    if (!data.fav) data.fav = undefined; // undefined pisa el valor anterior al mergear y no se guarda en JSON
+    const fotoTxt = frm.foto.value.trim();
+    data.foto = fotoTxt || undefined;
+    if (fotoPend !== undefined) {
+      const fs = LS.get(K_FOTOS, {});
+      if (fotoPend) fs[data.id] = fotoPend; else delete fs[data.id];
+      LS.set(K_FOTOS, fs);
+      if (fotoPend && !LS.get(K_FOTOS, {})[data.id]) alert("No entró la foto en el almacenamiento del navegador. Probá con una más chica.");
+    }
     const secName = frm.seccion.value.trim();
     let sec = cfg.secciones.find(s => norm(s.nombre) === norm(secName));
     if (!sec) { sec = { id: slug(secName), nombre: secName, icono: "folder", color: "#64748B", apps: [] }; cfg.secciones.push(sec); }
@@ -333,6 +412,7 @@
     $("#btnEdit").classList.toggle("active", editing);
     $("#btnEdit span").textContent = editing ? "Listo" : "Editar";
     $("#editActions").hidden = !editing;
+    render();
   });
   $("#btnTheme").addEventListener("click", () => {
     prefs.theme = { auto: "dark", dark: "light", light: "auto" }[prefs.theme]; LS.set(K.prefs, prefs); applyTheme();
@@ -357,8 +437,8 @@
     e.target.value = "";
   });
   $("#btnReset").addEventListener("click", () => {
-    if (!confirm("¿Volver a la config del repo (config.js)? Se pierden los cambios locales.")) return;
-    LS.del(K.cfg); cfg = clone(DEFAULT); render(); pingAll();
+    if (!confirm("¿Volver a la config del repo (config.js)? Se pierden los cambios locales y el orden de secciones (tus fotos se mantienen).")) return;
+    LS.del(K.cfg); LS.del(K_ORD); LS.del(K_OCU); cfg = clone(DEFAULT); render(); pingAll();
   });
 
   // ---------- calendario de remates ----------

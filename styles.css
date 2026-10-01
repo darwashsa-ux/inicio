@@ -333,3 +333,48 @@ dialog input:focus { outline: 2px solid var(--teal); outline-offset: -1px; }
 .greet .nombre { cursor: pointer; border-bottom: 1px dashed rgba(201,162,39,.5); }
 .greet .pedir { font: 13px var(--sans); color: rgba(255,255,255,.7); background: none; border: 0; cursor: pointer; text-decoration: underline; margin-left: 6px; padding: 0; }
 @media (max-width: 1180px) { .brand-logos { display: none; } }
+
+/* ================= tarjetas con foto de fondo ================= */
+.grid:not(.compact) .tile:not(.add-tile) { padding: 0; gap: 0; min-height: 0; }
+.tile .cover {
+  position: relative; display: block; height: 92px; overflow: hidden; flex: none;
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--c) 70%, transparent), transparent 60%),
+    linear-gradient(135deg, color-mix(in srgb, var(--c) 55%, #0E2A30), color-mix(in srgb, var(--c) 18%, #0E2A30));
+}
+.tile .cover img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .5s ease; }
+.tile .cover.foto::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,.18) 0%, transparent 35%, transparent 60%, rgba(0,0,0,.28) 100%); }
+.tile .cover .cover-ico { position: absolute; right: -14px; bottom: -22px; width: 104px; height: 104px; color: #fff; opacity: .16; stroke-width: 1.4; }
+.tile:hover .cover img, .tile:focus-visible .cover img { transform: scale(1.06); }
+.grid:not(.compact) .tile .ico {
+  margin: -27px 0 0 16px; position: relative; z-index: 1; width: 54px; height: 54px;
+  background: color-mix(in srgb, var(--c) 12%, var(--card)); box-shadow: 0 0 0 3px var(--card), inset 0 0 0 1.5px color-mix(in srgb, var(--c) 35%, transparent);
+}
+.grid:not(.compact) .tile .txt { padding: 10px 16px 16px; }
+.grid:not(.compact) .tile .dot { top: 12px; right: 12px; box-shadow: 0 0 0 3px rgba(0,0,0,.25); }
+.grid:not(.compact) .tile .num { top: 8px; right: 28px; background: rgba(0,0,0,.35); color: #fff; border-color: rgba(255,255,255,.25); }
+.grid:not(.compact) .tile .badge { top: 10px; right: 10px; background: rgba(0,0,0,.45); color: #F5D77A; }
+.grid:not(.compact) .tile::before { z-index: 2; }
+.grid.compact .tile .cover { display: none; }
+.tile.add-tile { min-height: 150px; }
+@media (max-width: 560px) { .tile .cover { height: 72px; } .grid:not(.compact) .tile .ico { width: 44px; height: 44px; margin-top: -22px; margin-left: 12px; } .grid:not(.compact) .tile .txt { padding: 8px 12px 12px; } }
+
+/* ================= ordenar / ocultar secciones ================= */
+.sec-ctrl { display: none; gap: 6px; margin-left: 4px; }
+body.editing .sec-ctrl { display: inline-flex; }
+.sec-ctrl .tbtn { width: 30px; height: 30px; color: var(--txt); }
+.sec-ctrl .tbtn:disabled { opacity: .3; cursor: default; }
+.sec-ctrl .tbtn.on { color: #C2410C; } .sec-ctrl .tbtn.on svg { fill: none; }
+.sec.is-oculta { opacity: .45; }
+.sec.is-oculta .grid { display: none; }
+.ocultas-nota { margin-top: 26px; text-align: center; color: var(--mut); font-size: 12.5px; }
+
+/* ---- editor: foto ---- */
+.foto-input { display: flex; gap: 8px; align-items: center; }
+.foto-input input { flex: 1; }
+.foto-prev { width: 84px; height: 40px; flex: none; border-radius: 8px; background: var(--bg2) center/cover no-repeat; border: 1px solid var(--line); }
+.foto-prev.vacia { background-image: repeating-linear-gradient(45deg, transparent 0 6px, var(--line) 6px 7px); }
+.foto-input .btn.sm { height: 40px; }
+.grid:not(.compact) .tile .tools { top: 10px; left: 10px; right: auto; bottom: auto; }
+.grid:not(.compact) .tile .tools .tbtn { background: rgba(0,0,0,.45); color: #fff; border-color: rgba(255,255,255,.25); }

@@ -21,6 +21,8 @@ Launcher estático (sin build) del Grupo Darwash (Darwash SA, Pecuaria El Garab�
 - Secciones con `soloAdmin: true` solo se ven en equipos con localStorage `dw.admin=1` (se activa abriendo la URL con `?admin=1`, se desactiva con `?admin=0`).
 - El saludo usa el nombre de cada usuario (localStorage `dw.nombre`), no hay nombre fijo en config.
 - Logos en `img/`: logo-white/drw-teal (Darwash), garabi-color/white, bulltrade-color/white.
+- Fotos de tarjetas: campo `foto` en cada app de config.js → archivos en `img/cards/` (JPG ~640x270, <60KB; achicar con Pillow antes de commitear). Sin foto, la tarjeta muestra un degradé del color de la sección con el ícono. Los usuarios también pueden subir una foto personal desde Editar (localStorage `dw.fotos`, no se comparte).
+- Orden y ocultar secciones: preferencia de cada usuario en localStorage (`dw.secOrden`, `dw.secOcultas`), botones ↑ ↓ 👁 en modo Editar. El orden por defecto es el de config.js.
 - Probar abriendo `index.html` en el navegador antes de pushear.
 
 ## Publicar

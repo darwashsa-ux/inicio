@@ -6,9 +6,10 @@
 //  icono: cualquier nombre de https://lucide.dev/icons (kebab-case)
 //  ping:  true = chequea si la app responde (punto verde/rojo)
 //  url:   "" = queda marcada como "falta URL"
+//  foto:  (opcional) foto de fondo de la tarjeta, ej "img/cards/feria.jpg" (640x270 aprox)
 // ============================================================
 window.DW_CONFIG = {
-  version: 6, // subilo cuando cambies este archivo: pisa los cambios locales hechos con "Editar"
+  version: 7, // subilo cuando cambies este archivo: pisa los cambios locales hechos con "Editar"
   empresa: "Grupo Darwash",
   ubicacion: { nombre: "Vicuña Mackenna", lat: -34.415, lon: -64.389 },
   // Calendario de remates (tabla calendario_remates en Supabase — ver supabase/calendario_remates.sql)
@@ -26,10 +27,10 @@ window.DW_CONFIG = {
       color: "#008995",
       apps: [
         { id: "operaciones", nombre: "Darwash Operaciones", desc: "Consignación, remates y feedlot", url: "https://darwash-operaciones.vercel.app/", icono: "handshake", ping: true },
-        { id: "remates-app", nombre: "Remates Darwash", desc: "App operativa de remate de hacienda", url: "https://remates-app-three.vercel.app/", icono: "gavel", ping: true },
+        { id: "remates-app", nombre: "Remates Darwash", desc: "App operativa de remate de hacienda", url: "https://remates-app-three.vercel.app/", icono: "gavel", ping: true, foto: "img/cards/ternera.jpg" },
         { id: "anotaciones-admin", nombre: "Anotaciones Feria", desc: "Admin · remates, comisionistas y links de carga", url: "https://darwashsa-ux.github.io/darwash-anotaciones/admin.html", icono: "notebook-pen", ping: true },
-        { id: "tablero-dte", nombre: "Tablero DTE", desc: "SIGSA · por remate y por consignataria", url: "https://darwashsa-ux.github.io/darwash-dte/", icono: "truck", ping: true },
-        { id: "boletin-remate", nombre: "Boletín de Remate", desc: "Catálogo mobile para compradores", url: "https://darwashsa-ux.github.io/remate/", icono: "book-open", ping: true }
+        { id: "tablero-dte", nombre: "Tablero DTE", desc: "SIGSA · por remate y por consignataria", url: "https://darwashsa-ux.github.io/darwash-dte/", icono: "truck", ping: true, foto: "img/cards/caravana.jpg" },
+        { id: "boletin-remate", nombre: "Boletín de Remate", desc: "Catálogo mobile para compradores", url: "https://darwashsa-ux.github.io/remate/", icono: "book-open", ping: true, foto: "img/cards/cielo-campo.jpg" }
       ]
     },
     {

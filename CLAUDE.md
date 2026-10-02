@@ -16,13 +16,16 @@ Launcher estático (sin build) del Grupo Darwash (Darwash SA, Pecuaria El Garab�
 - **Nada de scripts inline ni `onclick=` en el HTML**: la CSP de extensiones MV3 los bloquea. Todo JS va en archivos .js.
 - **Nada de CDNs**: todo recurso tiene que estar en el repo (la extensión corre offline).
 - Íconos: nombres de https://lucide.dev/icons (kebab-case). Verificar que existan en la versión vendorizada (0.469).
-- **Al cambiar `config.js`, subir `version`** (si no, los navegadores con cambios locales del modo Editar no ven la config nueva).
+- **Capa personal**: config.js es la base compartida; lo que cada usuario agrega/edita/borra/marca favorito en modo Editar se guarda aparte en localStorage `dw.personal` ({mias, cambios, borradas, favs}) y se aplica encima en `buildCfg()`. Un push NUNCA borra lo personal. No volver a guardar la config entera en localStorage.
+- `version` en config.js: subirla igual en cada cambio (la usa el export). `IDS_HISTORICOS` en app.js lista ids que alguna vez estuvieron en config.js: si sacás una app del repo, agregá su id ahí.
+- "Exportar config.js" (Leo) = config del repo + sus cambios personales, con version+1 → reemplazar config.js del repo y pushear; después "Restaurar" para limpiar su capa personal.
 - Remates: tabla `calendario_remates` (id, fecha, lugar) en el Supabase de Anotaciones Feria. Lectura pública; alta/baja SOLO vía RPC `cal_agregar` / `cal_borrar` con PIN (ver `supabase/calendario_remates.sql`). El PIN se guarda en localStorage (`dw.calpin`). Plazas rápidas en `config.plazas`.
 - Secciones con `soloAdmin: true` solo se ven en equipos con localStorage `dw.admin=1` (se activa abriendo la URL con `?admin=1`, se desactiva con `?admin=0`).
 - El saludo usa el nombre de cada usuario (localStorage `dw.nombre`), no hay nombre fijo en config.
 - Logos en `img/`: logo-white/drw-teal (Darwash), garabi-color/white, bulltrade-color/white.
 - Fotos de tarjetas: campo `foto` en cada app de config.js → archivos en `img/cards/` (JPG ~640x270, <60KB; achicar con Pillow antes de commitear). Sin foto, la tarjeta muestra un degradé del color de la sección con el ícono. Los usuarios también pueden subir una foto personal desde Editar (localStorage `dw.fotos`, no se comparte).
 - Orden y ocultar secciones: preferencia de cada usuario en localStorage (`dw.secOrden`, `dw.secOcultas`), botones ↑ ↓ 👁 en modo Editar. El orden por defecto es el de config.js.
+- Frase del día: `frases.js` (`DW_FRASES` [frase, autor], misma frase para todos por día; `DW_MENSAJES` = avisos según el día: remate hoy/mañana, lluvia ≥5 mm, helada, calor ≥33°, lunes/viernes, cumpleaños de `config.cumples` con fecha "MM-DD"). Solo citas verificadas; si no hay autor seguro, va sin autor ("Grupo Darwash").
 - Probar abriendo `index.html` en el navegador antes de pushear.
 
 ## Publicar

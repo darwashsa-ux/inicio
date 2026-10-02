@@ -12,8 +12,7 @@
 
   const clone = o => JSON.parse(JSON.stringify(o));
   const DEFAULT = clone(window.DW_CONFIG || { secciones: [] });
-  let cfg = LS.get(K.cfg, null);
-  if (!cfg || (cfg.version || 0) < (DEFAULT.version || 0)) cfg = clone(DEFAULT); // config del repo más nueva gana
+  let cfg; // = config del repo (config.js) + capa personal de cada usuario → ver buildCfg()
   let prefs = Object.assign({ newTab: false, theme: "auto" }, LS.get(K.prefs, {}));
   let uso = LS.get(K.uso, {});
   let editing = false;
@@ -23,7 +22,17 @@
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const norm = s => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   const slug = s => norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "app-" + Date.now();
-  const icons = () => { try { window.lucide && lucide.createIcons(); } catch {} };
+  // Íconos: si un nombre no existe en Lucide (ej. mientras se tipea en el editor) se reemplaza
+  // por uno genérico ANTES de dibujar, así Lucide no tira warnings en chrome://extensions.
+  const pascal = n => String(n || "").trim().split("-").filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join("");
+  const iconOk = n => !!(window.lucide && lucide.icons && lucide.icons[pascal(n)]);
+  const icons = () => {
+    try {
+      if (!window.lucide) return;
+      document.querySelectorAll("i[data-lucide]").forEach(el => { if (!iconOk(el.dataset.lucide)) el.setAttribute("data-lucide", "circle-dashed"); });
+      lucide.createIcons();
+    } catch {}
+  };
 
   // ---------- perfil: admin (secciones soloAdmin) y nombre por usuario ----------
   try {
@@ -44,7 +53,71 @@
   const secciones = () => seccionesTodas().filter(s => !oculta(s.id));
   const fotoDe = a => LS.get(K_FOTOS, {})[a.id] || a.foto || "";
   const allApps = () => secciones().flatMap(s => s.apps.map(a => ({ ...a, _sec: s })));
-  const saveCfg = () => LS.set(K.cfg, cfg);
+
+  // ---------- capa personal ----------
+  // config.js es de todos y se actualiza con cada push. Lo que cada usuario agrega o cambia
+  // vive aparte (localStorage "dw.personal") y se aplica ENCIMA, así un push nunca lo borra.
+  const K_PERS = "dw.personal";
+  const persVacia = () => ({ mias: [], cambios: {}, borradas: [], favs: null });
+  let pers = Object.assign(persVacia(), LS.get(K_PERS, {}));
+  const idsRepo = () => new Set(DEFAULT.secciones.flatMap(s => s.apps.map(a => a.id)));
+  // ids que alguna vez estuvieron en config.js (para no confundirlos con apps personales al migrar)
+  const IDS_HISTORICOS = new Set(("boletin-remate darwash-remates mapa-corrales feria-en-vivo mag rosgan tablero-dte dte-remates " +
+    "control-dte-physis senasa arca portal-comisionistas revision-gastos pesadas field-ops supabase vercel cloudflare github make " +
+    "looker gmail drive sheets calendar operaciones remates-app anotaciones-admin ipcva bcr a3 windy smn sigsa mi-senasa galicia whatsapp").split(" "));
+
+  function buildCfg() {
+    const c = clone(DEFAULT);
+    const borr = new Set(pers.borradas);
+    c.secciones.forEach(s => s.apps = s.apps.filter(a => !borr.has(a.id)));
+    const secPorNombre = (nombre) => {
+      let sec = c.secciones.find(s => norm(s.nombre) === norm(nombre) || s.id === nombre);
+      if (!sec) { sec = { id: slug(nombre), nombre, icono: "user", color: "#C9A227", apps: [], personal: true }; c.secciones.push(sec); }
+      return sec;
+    };
+    // cambios sobre apps del repo
+    for (const [id, ch] of Object.entries(pers.cambios)) {
+      const from = c.secciones.find(s => s.apps.some(a => a.id === id)); if (!from) continue;
+      const i = from.apps.findIndex(a => a.id === id);
+      const app = { ...from.apps[i], ...ch }; delete app.sec;
+      if (ch.sec && norm(ch.sec) !== norm(from.nombre)) { from.apps.splice(i, 1); secPorNombre(ch.sec).apps.push(app); }
+      else from.apps[i] = app;
+    }
+    // apps propias
+    pers.mias.forEach(m => { if (!m?.app?.id || c.secciones.some(s => s.apps.some(a => a.id === m.app.id))) return; secPorNombre(m.sec || "Mis accesos").apps.push({ ...m.app }); });
+    // favoritas
+    if (Array.isArray(pers.favs)) c.secciones.forEach(s => s.apps.forEach(a => { a.fav = pers.favs.includes(a.id) || undefined; }));
+    c.secciones = c.secciones.filter(s => s.apps.length || !s.personal);
+    return c;
+  }
+  const savePers = () => { LS.set(K_PERS, pers); cfg = buildCfg(); };
+
+  // Rescate: versiones anteriores guardaban todo en "dw.cfg" y un push lo pisaba.
+  // Si quedó algo ahí, se pasa a la capa personal (una sola vez) y se guarda un backup.
+  function migrarDesde(viejo, { soloNuevas }) {
+    if (!viejo || !Array.isArray(viejo.secciones)) return 0;
+    const repo = idsRepo(); let n = 0;
+    const favs = new Set(pers.favs || []);
+    viejo.secciones.forEach(s => (s.apps || []).forEach(a => {
+      if (!a?.id) return;
+      if (a.fav) favs.add(a.id);
+      const yaMia = pers.mias.some(m => m.app.id === a.id);
+      if (!repo.has(a.id) && !(soloNuevas && IDS_HISTORICOS.has(a.id)) && !yaMia) {
+        const { fav, ...app } = a; pers.mias.push({ sec: s.nombre, app }); n++;
+      }
+    }));
+    if (favs.size) pers.favs = [...favs];
+    return n;
+  }
+  try {
+    const viejo = LS.get(K.cfg, null);
+    if (viejo && !LS.get("dw.migrado", false)) {
+      LS.set("dw.cfg.backup", viejo);
+      const n = migrarDesde(viejo, { soloNuevas: true });
+      LS.set(K_PERS, pers); LS.set("dw.migrado", true); LS.del(K.cfg);
+      if (n) setTimeout(() => alert(`Recuperé ${n} acceso${n === 1 ? "" : "s"} que tenías cargado${n === 1 ? "" : "s"}. A partir de ahora tus cambios no se borran con las actualizaciones.`), 600);
+    }
+  } catch {}
 
   // ---------- tema ----------
   function applyTheme() {
@@ -64,7 +137,7 @@
     const h = now.getHours();
     const saludo = h < 6 ? "Buenas noches" : h < 13 ? "Buen día" : h < 20 ? "Buenas tardes" : "Buenas noches";
     const dia = now.getDay();
-    const extra = dia === 1 ? " · arrancamos la semana" : dia === 5 ? " · último empujón" : "";
+    const extra = "";
     const nombre = LS.get("dw.nombre", "");
     const html = nombre
       ? `${saludo}, <em class="nombre" title="Cambiar nombre">${esc(nombre)}</em>${extra}`
@@ -85,7 +158,7 @@
     const has = !!a.url;
     const color = a.color || a._sec?.color || "#008995";
     const tgt = prefs.newTab ? ' target="_blank" rel="noopener"' : "";
-    const ico = a.icono ? `<i data-lucide="${esc(a.icono)}"></i>` : `<span class="letter">${esc((a.nombre || "?")[0])}</span>`;
+    const ico = iconOk(a.icono) ? `<i data-lucide="${esc(a.icono)}"></i>` : `<span class="letter">${esc((a.nombre || "?")[0])}</span>`;
     const st = pingState[a.id];
     const dot = a.ping && has ? `<span class="dot ${st || "wait"}" title="${st === "ok" ? "Responde" : st === "ko" ? "No responde" : "Chequeando…"}"></span>` : "";
     const badge = has ? "" : `<span class="badge">Falta URL</span>`;
@@ -93,7 +166,7 @@
     const foto = fotoDe(a);
     const cover = `<span class="cover${foto ? " foto" : ""}">${foto
       ? `<img src="${esc(foto)}" alt="" loading="lazy" decoding="async">`
-      : (a.icono ? `<i data-lucide="${esc(a.icono)}" class="cover-ico"></i>` : "")}</span>`;
+      : (iconOk(a.icono) ? `<i data-lucide="${esc(a.icono)}" class="cover-ico"></i>` : "")}</span>`;
     return `<a class="tile${has ? "" : " nourl"}" style="--c:${esc(color)}" data-id="${esc(a.id)}" href="${has ? esc(a.url) : "#"}"${has ? tgt : ""}>
       ${cover}
       <span class="ico">${ico}</span>
@@ -291,6 +364,7 @@
 
       const dd = d.daily; const cells = [];
       const ayer = dd.precipitation_sum[0];
+      ctxDia.lluvia = ayer; ctxDia.min = dd.temperature_2m_min[1]; ctxDia.max = dd.temperature_2m_max[1]; pintarFrase();
       cells.push(`<div class="fc ayer" title="Lluvia acumulada ayer"><i data-lucide="cloud-rain"></i>Ayer<b class="rain">${ayer.toFixed(1)} mm</b></div>`);
       for (let i = 1; i < dd.time.length; i++) {
         const dt = new Date(dd.time[i] + "T12:00:00");
@@ -371,8 +445,10 @@
   $("#fotoQuitar").addEventListener("click", () => { fotoPend = ""; frm.foto.value = ""; fotoPreview(""); });
   $("#btnCancel").addEventListener("click", () => dlg.close());
   $("#btnDelete").addEventListener("click", () => {
-    cfg.secciones.forEach(s => s.apps = s.apps.filter(x => x.id !== editId));
-    saveCfg(); dlg.close(); render();
+    if (idsRepo().has(editId)) { if (!pers.borradas.includes(editId)) pers.borradas.push(editId); }
+    else pers.mias = pers.mias.filter(m => m.app.id !== editId);
+    delete pers.cambios[editId];
+    savePers(); dlg.close(); render();
   });
   frm.addEventListener("submit", e => {
     e.preventDefault();
@@ -389,21 +465,27 @@
       LS.set(K_FOTOS, fs);
       if (fotoPend && !LS.get(K_FOTOS, {})[data.id]) alert("No entró la foto en el almacenamiento del navegador. Probá con una más chica.");
     }
-    const secName = frm.seccion.value.trim();
-    let sec = cfg.secciones.find(s => norm(s.nombre) === norm(secName));
-    if (!sec) { sec = { id: slug(secName), nombre: secName, icono: "folder", color: "#64748B", apps: [] }; cfg.secciones.push(sec); }
-    const prev = cfg.secciones.find(s => s.apps.some(x => x.id === editId));
-    if (prev && prev !== sec) prev.apps = prev.apps.filter(x => x.id !== editId);
-    const idx = sec.apps.findIndex(x => x.id === data.id);
-    if (idx >= 0) sec.apps[idx] = { ...sec.apps[idx], ...data }; else sec.apps.push(data);
-    cfg.secciones = cfg.secciones.filter(s => s.apps.length);
-    saveCfg(); dlg.close(); render();
+    const secName = frm.seccion.value.trim() || "Mis accesos";
+    // favorita → lista personal
+    const favs = new Set(pers.favs || cfg.secciones.flatMap(x => x.apps.filter(a => a.fav).map(a => a.id)));
+    data.fav ? favs.add(data.id) : favs.delete(data.id); pers.favs = [...favs];
+    const { fav, ...app } = data;
+    if (idsRepo().has(data.id)) {
+      pers.cambios[data.id] = { ...app, sec: secName };            // cambio sobre una app del repo
+    } else {
+      let id = app.id; while (!editId && (idsRepo().has(id) || pers.mias.some(m => m.app.id === id))) id += "-2";
+      app.id = id;
+      const i = pers.mias.findIndex(m => m.app.id === id);
+      if (i >= 0) pers.mias[i] = { sec: secName, app }; else pers.mias.push({ sec: secName, app });
+    }
+    savePers(); dlg.close(); render();
     if (data.ping && data.url) ping(data);
   });
 
   function toggleFav(id) {
-    cfg.secciones.forEach(s => s.apps.forEach(a => { if (a.id === id) a.fav = !a.fav || undefined; }));
-    saveCfg(); render();
+    const favs = new Set(pers.favs || cfg.secciones.flatMap(x => x.apps.filter(a => a.fav).map(a => a.id)));
+    favs.has(id) ? favs.delete(id) : favs.add(id); pers.favs = [...favs];
+    savePers(); render();
   }
 
   $("#btnEdit").addEventListener("click", () => {
@@ -421,7 +503,7 @@
 
   $("#btnExport").addEventListener("click", () => {
     const body = "// Exportado desde Darwash · Inicio — " + new Date().toLocaleString("es-AR") +
-      "\nwindow.DW_CONFIG = " + JSON.stringify(cfg, null, 2) + ";\n";
+      "\nwindow.DW_CONFIG = " + JSON.stringify({ ...cfg, version: (DEFAULT.version || 0) + 1 }, null, 2) + ";\n";
     const aEl = document.createElement("a");
     aEl.href = URL.createObjectURL(new Blob([body], { type: "text/javascript" }));
     aEl.download = "config.js"; aEl.click(); setTimeout(() => URL.revokeObjectURL(aEl.href), 2000);
@@ -432,13 +514,15 @@
       const txt = await f.text();
       const json = JSON.parse(txt.slice(txt.indexOf("{"), txt.lastIndexOf("}") + 1));
       if (!Array.isArray(json.secciones)) throw 0;
-      cfg = json; saveCfg(); render(); pingAll();
+      const n = migrarDesde(json, { soloNuevas: false }); savePers(); render(); pingAll();
+      alert(n ? `Importé ${n} acceso${n === 1 ? "" : "s"} a tus apps personales.` : "No había accesos nuevos para importar.");
     } catch { alert("Archivo inválido: tiene que ser un config.js exportado o un JSON con 'secciones'."); }
     e.target.value = "";
   });
   $("#btnReset").addEventListener("click", () => {
-    if (!confirm("¿Volver a la config del repo (config.js)? Se pierden los cambios locales y el orden de secciones (tus fotos se mantienen).")) return;
-    LS.del(K.cfg); LS.del(K_ORD); LS.del(K_OCU); cfg = clone(DEFAULT); render(); pingAll();
+    if (!confirm("¿Borrar TUS cambios (apps que agregaste, ediciones, favoritas, orden de secciones) y volver a la config original? Tus fotos se mantienen.")) return;
+    LS.set("dw.personal.backup", pers);
+    pers = persVacia(); LS.del(K_ORD); LS.del(K_OCU); savePers(); render(); pingAll();
   });
 
   // ---------- calendario de remates ----------
@@ -478,6 +562,7 @@
     const manual = (cfg.remates || []).map(r => ({ id: null, fecha: r.fecha, lugar: r.lugar || r.nombre || "Remate" }));
     remLista = [...remLista, ...manual].map(r => ({ ...r, d: toD(r.fecha) })).filter(r => !isNaN(r.d)).sort((a, b) => a.d - b.d);
     pintarTira();
+    pintarFrase();
     if ($("#dlgCal").open) pintarCal();
   }
 
@@ -616,7 +701,51 @@
     abrirCal(t.dataset.fecha || null);
   });
 
+  // ---------- frase del día + mensaje según el día ----------
+  const ctxDia = {};
+  let fraseOffset = 0; // "otra frase" (solo en esta pestaña)
+  const diaNum = () => { const d = new Date(); return Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000); };
+  const elegir = (arr, salt = 0) => arr[(diaNum() + salt) % arr.length];
+  const fill = (t, v) => t.replace(/\{(\w+)\}/g, (_, k) => v[k] ?? "");
+
+  function mensajeDelDia() {
+    const M = window.DW_MENSAJES || {}, hoy = new Date(), out = [];
+    const mmdd = `${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+    (cfg.cumples || []).filter(c => c.fecha === mmdd).forEach(c => M.cumple && out.push({ ico: "cake", t: fill(elegir(M.cumple), { nombre: c.nombre }) }));
+    const hoyS = ymd(hoy), manS = ymd(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1));
+    const rh = remLista.find(r => r.fecha === hoyS), rm = remLista.find(r => r.fecha === manS);
+    if (rh && M.remateHoy) out.push({ ico: "gavel", t: fill(elegir(M.remateHoy), { lugar: rh.lugar }), dest: true });
+    else if (rm && M.remateManana) out.push({ ico: "gavel", t: fill(elegir(M.remateManana), { lugar: rm.lugar }) });
+    if (ctxDia.lluvia >= 5 && M.lluvia) out.push({ ico: "cloud-rain", t: fill(elegir(M.lluvia), { mm: Math.round(ctxDia.lluvia) }) });
+    if (ctxDia.min != null && ctxDia.min <= 0 && M.helada) out.push({ ico: "snowflake", t: fill(elegir(M.helada), { min: Math.round(ctxDia.min) }) });
+    if (ctxDia.max != null && ctxDia.max >= 33 && M.calor) out.push({ ico: "sun", t: fill(elegir(M.calor), { max: Math.round(ctxDia.max) }) });
+    if (!out.length && hoy.getDay() === 1 && M.lunes) out.push({ ico: "sunrise", t: elegir(M.lunes) });
+    if (!out.length && hoy.getDay() === 5 && M.viernes) out.push({ ico: "party-popper", t: elegir(M.viernes) });
+    return out.slice(0, 2);
+  }
+
+  function pintarFrase() {
+    const F = window.DW_FRASES || [], el = $("#frase");
+    if (!F.length || !el) return;
+    // paso 37 (coprimo con el largo) para que días seguidos no traigan frases de la misma tanda
+    let paso = 37; while (F.length % paso === 0) paso++;
+    const idx = ((diaNum() + fraseOffset) * paso) % F.length;
+    const [texto, autor] = F[idx];
+    const msgs = mensajeDelDia();
+    el.innerHTML = `
+      ${msgs.map(m => `<div class="frase-msg${m.dest ? " dest" : ""}"><i data-lucide="${m.ico}"></i><span>${esc(m.t)}</span></div>`).join("")}
+      <div class="frase-main">
+        <i data-lucide="quote" class="frase-q"></i>
+        <blockquote>${esc(texto)}${autor ? `<cite>— ${esc(autor)}</cite>` : `<cite>— Grupo Darwash</cite>`}</blockquote>
+        <button class="tbtn frase-otra" type="button" title="Otra frase"><i data-lucide="refresh-cw"></i></button>
+      </div>`;
+    el.hidden = false; icons();
+  }
+  $("#frase").addEventListener("click", e => { if (e.target.closest(".frase-otra")) { fraseOffset++; pintarFrase(); } });
+
   // ---------- init ----------
+  cfg = buildCfg();
+  pintarFrase();
   $("#lugar").textContent = cfg.ubicacion?.nombre || "";
   remates();
   applyTheme(); tick(); render();
